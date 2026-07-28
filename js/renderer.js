@@ -8,8 +8,9 @@ export const GRID_SIZE = 160;   // world grid cells (board is always GRID_SIZE �
 const TILE_SIZE = 0.5;          // world units per grid cell
 
 // Palette
-const COLOR_WATER = 0x1C3A5E;
-const COLOR_ICE   = 0xD8EEF5;
+const COLOR_WATER  = 0x1C3A5E;
+const COLOR_ICE    = 0xD8EEF5;
+const COLOR_BORDER = 0x0A1828; // darker navy frame around the map edge
 
 // Isometric camera frustum for the zoomed-in follow-cam.
 // fH = 12 ≈ 4× zoom vs. the original full-board value of 50;
@@ -61,6 +62,32 @@ export class Renderer {
     waterPlane.rotation.x = -Math.PI / 2;
     waterPlane.position.y = -0.01; // just below ice slab surface
     this.scene.add(waterPlane);
+
+    // ── Map border ───────────────────────────────────────────────────────────
+    // Four dark navy strips forming a frame just outside the 80×80 grid so the
+    // edge of the map is always visible even when all border ice is gone.
+    {
+      const borderMat   = new THREE.MeshBasicMaterial({ color: COLOR_BORDER });
+      const half        = GRID_SIZE * TILE_SIZE / 2; // 40 wu — half the board width
+      const thickness   = 1.0;                        // world units wide
+      const borderY     = -0.005;                     // just above the water plane
+      const outerOffset = half + thickness / 2;
+      const innerLen    = half * 2;                   // 80 wu — parallel side length
+      const outerLen    = innerLen + thickness * 2;   // 82 wu — includes corners
+
+      [
+        // [planeW, planeD, cx, cz]  — north, south, west, east
+        [outerLen, thickness,  0,            -outerOffset],
+        [outerLen, thickness,  0,             outerOffset],
+        [thickness, innerLen, -outerOffset,   0           ],
+        [thickness, innerLen,  outerOffset,   0           ],
+      ].forEach(([w, d, cx, cz]) => {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), borderMat);
+        m.rotation.x = -Math.PI / 2;
+        m.position.set(cx, borderY, cz);
+        this.scene.add(m);
+      });
+    }
 
     // ── Ice InstancedMesh (populated in Phase 2 by initIceMesh) ─────────────
     this._dummy    = new THREE.Object3D();
