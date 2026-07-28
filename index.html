@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Icebreaker</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #000;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* Canvas fills as much space as possible while keeping 4:3 (320×240) */
+    #c {
+      display: block;
+      width: min(100vw, calc(100vh * 4 / 3));
+      aspect-ratio: 4 / 3;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges; /* Safari fallback */
+    }
+
+    /* ── Start screen ─────────────────────────────────────────────────── */
+    #start-screen {
+      position: fixed;
+      inset: 0;
+      background: #07111d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      font-family: monospace;
+      color: #c8e4ff;
+    }
+
+    #start-inner {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 28px;
+    }
+
+    #start-inner h1 {
+      font-size: clamp(2.2rem, 9vw, 5.5rem);
+      letter-spacing: 0.25em;
+      color: #a0d4ff;
+      text-shadow: 0 0 30px #3388bb, 0 0 60px #1155aa;
+    }
+
+    #controls {
+      color: #7aadcc;
+      font-size: clamp(0.72rem, 1.8vw, 0.95rem);
+      line-height: 2.2;
+      border: 1px solid #1a3a55;
+      padding: 14px 30px;
+      background: #0b1e30;
+    }
+
+    #controls kbd {
+      display: inline-block;
+      background: #1a3a55;
+      border: 1px solid #336688;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+      color: #c8e4ff;
+    }
+
+    #start-inner h2 {
+      font-size: clamp(0.78rem, 2.2vw, 1.05rem);
+      letter-spacing: 0.2em;
+      color: #5a9abf;
+    }
+
+    #boat-selector {
+      display: flex;
+      gap: 18px;
+    }
+
+    .boat-card {
+      width: 110px;
+      padding: 14px 10px 12px;
+      border: 2px solid #1a3a55;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      background: #0b1e2e;
+      transition: border-color 0.15s, background 0.15s;
+      user-select: none;
+    }
+
+    .boat-card:hover   { border-color: #4488aa; background: #0f2840; }
+    .boat-card.selected { border-color: #88ccff; background: #142d44; }
+
+    .boat-card span {
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      color: #7aadcc;
+      text-transform: uppercase;
+    }
+
+    /* Top-down boat silhouette */
+    .boat-preview {
+      width: 54px;
+      height: 38px;
+      position: relative;
+      clip-path: polygon(12% 0%, 88% 0%, 100% 50%, 88% 100%, 12% 100%, 0% 50%);
+    }
+
+    .classic-preview { background: #8B4513; }
+    .arctic-preview  { background: #cce4f8; }
+    .tugboat-preview { background: #CC2200; width: 58px; height: 34px; }
+
+    .boat-preview .cabin {
+      position: absolute;
+      top: 20%;
+      left: 25%;
+      width: 38%;
+      height: 58%;
+    }
+
+    .classic-preview .cabin { background: #F4A460; }
+    .arctic-preview  .cabin { background: #1a3a6e; }
+    .tugboat-preview .cabin { background: #F5C540; top: 18%; left: 22%; width: 44%; height: 56%; }
+
+    #start-btn {
+      padding: 12px 52px;
+      background: #0e3a5c;
+      border: 2px solid #5aaadd;
+      color: #c8e4ff;
+      font-family: monospace;
+      font-size: clamp(1rem, 3vw, 1.35rem);
+      letter-spacing: 0.25em;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      text-transform: uppercase;
+    }
+
+    #start-btn:hover  { background: #185880; transform: scale(1.04); }
+    #start-btn:active { transform: scale(0.97); }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.168.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- Start screen overlay -->
+  <div id="start-screen">
+    <div id="start-inner">
+      <h1>ICEBREAKER</h1>
+
+      <div id="controls">
+        <div><kbd>↑</kbd> <kbd>↓</kbd> Move &nbsp;&nbsp; <kbd>←</kbd> <kbd>→</kbd> Turn</div>
+        <div>Click to navigate &nbsp;&nbsp; <kbd>Space</kbd> Horn</div>
+      </div>
+
+      <h2>SELECT VESSEL</h2>
+
+      <div id="boat-selector">
+        <div class="boat-card selected" data-type="classic">
+          <div class="boat-preview classic-preview"><div class="cabin"></div></div>
+          <span>Classic</span>
+        </div>
+        <div class="boat-card" data-type="arctic">
+          <div class="boat-preview arctic-preview"><div class="cabin"></div></div>
+          <span>Arctic</span>
+        </div>
+        <div class="boat-card" data-type="tugboat">
+          <div class="boat-preview tugboat-preview"><div class="cabin"></div></div>
+          <span>Tugboat</span>
+        </div>
+      </div>
+
+      <button id="start-btn">START</button>
+    </div>
+  </div>
+
+  <canvas id="c"></canvas>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
