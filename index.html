@@ -146,6 +146,28 @@
 
     #start-btn:hover  { background: #185880; transform: scale(1.04); }
     #start-btn:active { transform: scale(0.97); }
+
+    /* ── Horn touch button ───────────────────────────────────────────────── */
+    #horn-btn {
+      display: none; /* shown only on touch devices */
+      position: fixed;
+      bottom: clamp(16px, 4vw, 32px);
+      right:  clamp(16px, 4vw, 32px);
+      width:  clamp(60px, 14vw, 88px);
+      height: clamp(60px, 14vw, 88px);
+      border-radius: 50%;
+      background: #0e3a5c;
+      border: 3px solid #5aaadd;
+      color: #c8e4ff;
+      font-size: clamp(1.4rem, 5vw, 2.2rem);
+      cursor: pointer;
+      z-index: 5;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.1s, transform 0.1s;
+    }
+    #horn-btn:active { background: #185880; transform: scale(0.92); }
   </style>
 
   <script type="importmap">
@@ -190,6 +212,7 @@
   </div>
 
   <canvas id="c"></canvas>
+  <button id="horn-btn" aria-label="Horn">📯</button>
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

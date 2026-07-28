@@ -78,6 +78,18 @@ function startGame(boatType) {
     }
   }
 
+  // ── Horn touch button ──────────────────────────────────────────────────────
+  const hornBtn = document.getElementById('horn-btn');
+  if (navigator.maxTouchPoints > 0 || 'ontouchstart' in window) {
+    hornBtn.style.display = 'flex';
+    hornBtn.style.alignItems = 'center';
+    hornBtn.style.justifyContent = 'center';
+    hornBtn.addEventListener('touchstart', e => {
+      e.preventDefault();
+      playHorn();
+    }, { passive: false });
+  }
+
   // ── Mouse click-to-move ───────────────────────────────────────────────────
   const _raycaster   = new THREE.Raycaster();
   const _groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
