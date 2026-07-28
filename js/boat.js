@@ -6,6 +6,9 @@ import { GRID_SIZE, TILE_SIZE } from './world.js';
 const MOVE_SPEED = 6.0;  // world units per second (forward / backward)
 const TURN_SPEED = 2.5;  // radians per second     (left / right)
 
+const PITCH_FREQ  = 1.4;  // pitch oscillations per second
+const PITCH_AMP   = 0.055; // peak pitch angle in radians (~3°)
+
 // Keep the boat inside the world bounds (world is always 80 wu wide)
 const HALF       = GRID_SIZE / 2;              // grid half-cell count = 80
 const WORLD_HALF = HALF * TILE_SIZE;           // world half-size = 40 wu
@@ -228,6 +231,9 @@ export class Boat {
     this._smokeParticles = [];
     this._smokeTimer     = 0;
 
+    this._pitchTime  = 0; // running phase accumulator for pitch sine wave
+    this._pitchBlend = 0; // 0 = flat, 1 = full pitch (fades in/out with movement)
+
     scene.add(this.group);
   }
 
@@ -286,9 +292,21 @@ export class Boat {
     this.x = Math.max(MIN_POS, Math.min(MAX_POS, this.x));
     this.z = Math.max(MIN_POS, Math.min(MAX_POS, this.z));
 
+    // Pitch — gentle nose-up/down oscillation while moving
+    const moving = keyMoving || mouseMoving;
+    if (moving) {
+      this._pitchTime  += delta;
+      this._pitchBlend  = Math.min(1, this._pitchBlend + delta * 4);
+    } else {
+      this._pitchBlend  = Math.max(0, this._pitchBlend - delta * 2);
+    }
+    const pitch = Math.sin(this._pitchTime * PITCH_FREQ * Math.PI * 2) * PITCH_AMP * this._pitchBlend;
+
     // Sync Three.js transform
     this.group.position.set(this.x, this._groupY, this.z);
-    this.group.rotation.y = this.angle;
+    // 'YXZ' order: yaw (Y) is applied first so the subsequent pitch (X)
+    // rotates around the boat's own local axis, not the world X axis.
+    this.group.rotation.set(pitch, this.angle, 0, 'YXZ');
 
     // Smoke — emit while moving, update all active particles
     if (keyMoving || mouseMoving) {
