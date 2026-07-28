@@ -1,3 +1,5 @@
+<img width="595" height="443" alt="Screenshot 2026-07-27 205827" src="https://github.com/user-attachments/assets/d07d22e3-7677-4199-b768-ab74003ecbf0" />
+<img width="662" height="496" alt="Screenshot 2026-07-27 205802" src="https://github.com/user-attachments/assets/a818e8da-f3df-495a-8ab6-61b5bbf3d851" />
 # Icebreaker
 
 A browser-based isometric icebreaker game built with [Three.js](https://threejs.org/) — no build step required.
