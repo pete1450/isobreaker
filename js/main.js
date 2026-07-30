@@ -90,6 +90,29 @@ function startGame(boatType) {
     }, { passive: false });
   }
 
+  // ── Zoom button & slider ────────────────────────────────────────────────────
+  const zoomBtn    = document.getElementById('zoom-btn');
+  const zoomPanel  = document.getElementById('zoom-panel');
+  const zoomSlider = document.getElementById('zoom-slider');
+
+  zoomBtn.style.display = 'flex';
+
+  zoomBtn.addEventListener('click', () => {
+    const open = zoomPanel.style.display === 'flex';
+    zoomPanel.style.display = open ? 'none' : 'flex';
+  });
+
+  // Close zoom panel when clicking outside
+  document.addEventListener('pointerdown', e => {
+    if (!zoomPanel.contains(e.target) && e.target !== zoomBtn) {
+      zoomPanel.style.display = 'none';
+    }
+  });
+
+  zoomSlider.addEventListener('input', () => {
+    renderer.setZoom(Number(zoomSlider.value));
+  });
+
   // ── Mouse click-to-move ───────────────────────────────────────────────────
   const _raycaster   = new THREE.Raycaster();
   const _groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
