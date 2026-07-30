@@ -3,7 +3,7 @@
 export const GRID_SIZE = 160;
 export const TILE_SIZE = 0.5; // world units per grid cell (board stays 80×80)
 
-const BORDER = 4;   // width of the pre-filled water border (ocean edge)
+export const BORDER = 4;   // width of the pre-filled water border (ocean edge)
 
 export const ICE   = 0;
 export const WATER = 1;
@@ -15,7 +15,8 @@ const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 // ── World ─────────────────────────────────────────────────────────────────────
 
 export class World {
-  constructor() {
+  constructor(gameMode = 'mission') {
+    this.gameMode = gameMode;
     /** @type {Uint8Array}  flat row-major grid: index = gz * GRID_SIZE + gx */
     this.grid = new Uint8Array(GRID_SIZE * GRID_SIZE); // default 0 = ICE
 
@@ -127,6 +128,10 @@ export class World {
     for (let i = 0; i < components.length; i++) {
       if (i === mainIdx) continue;
       const cells = components[i];
+      // Only detach small enough regions; leave large ones as ICE so they
+      // can be split further by future boat moves.
+      // In freeplay mode this limit is disabled so all enclosed regions detach.
+      if (this.gameMode !== 'freeplay' && cells.length >= 2000) continue;
       // Mark cells as CHUNK so they are excluded from future analysis
       for (const { gx, gz } of cells) {
         this.grid[gz * GRID_SIZE + gx] = CHUNK;

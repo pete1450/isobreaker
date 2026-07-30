@@ -3,11 +3,13 @@ import { Renderer }      from './renderer.js';
 import { World }         from './world.js';
 import { Boat }          from './boat.js';
 import { ChunkManager }  from './chunks.js';
+import { RouteBoatManager } from './routes.js';
 
 const canvas = document.getElementById('c');
 
 // ── Start screen ──────────────────────────────────────────────────────────────
 let selectedBoat = 'classic';
+let selectedMode = 'mission';
 
 document.querySelectorAll('.boat-card').forEach(card => {
   card.addEventListener('click', () => {
@@ -17,17 +19,61 @@ document.querySelectorAll('.boat-card').forEach(card => {
   });
 });
 
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedMode = btn.dataset.mode;
+  });
+});
+
 document.getElementById('start-btn').addEventListener('click', () => {
   document.getElementById('start-screen').style.display = 'none';
-  startGame(selectedBoat);
+  startGame(selectedBoat, selectedMode);
+});
+
+document.getElementById('menu-btn').addEventListener('click', () => {
+  document.getElementById('end-screen').style.display = 'none';
+  document.getElementById('start-screen').style.display = 'flex';
 });
 
 // ── Game ──────────────────────────────────────────────────────────────────────
-function startGame(boatType) {
+function formatTime(sec) {
+  const total = Math.ceil(sec);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function startGame(boatType, gameMode) {
   const renderer     = new Renderer(canvas);
-  const world        = new World();
+  const world        = new World(gameMode);
   const boat         = new Boat(renderer.scene, boatType);
   const chunkManager = new ChunkManager(renderer.scene);
+  const hudEl    = document.getElementById('mission-hud');
+  const hudTimer = document.getElementById('hud-timer');
+  const hudScore = document.getElementById('hud-score');
+  const hudBoat  = document.getElementById('hud-boat');
+
+  let gameRunning = true;
+
+  const routeBoats = gameMode === 'freeplay'
+    ? null
+    : new RouteBoatManager(renderer.scene, world, chunkManager, {
+        onTick(secondsLeft, totalScore, boatsCrossed) {
+          hudTimer.textContent = formatTime(secondsLeft);
+          hudScore.textContent = `SCORE: ${totalScore}`;
+          hudBoat.textContent  = `BOAT ${boatsCrossed + 1} OF 5`;
+        },
+        onGameOver(totalScore) {
+          gameRunning = false;
+          hudEl.style.display = 'none';
+          document.getElementById('final-score').textContent = `SCORE: ${totalScore}`;
+          document.getElementById('end-screen').style.display = 'flex';
+        },
+      });
+
+  if (gameMode === 'mission') hudEl.style.display = 'flex';
 
   renderer.initIceMesh(world);
 
@@ -169,6 +215,7 @@ function startGame(boatType) {
   const clock = new THREE.Clock();
 
   function loop() {
+    if (!gameRunning) return;
     const delta = clock.getDelta();
 
     // Move boat; get all grid cells covered by the hull width
@@ -196,6 +243,7 @@ function startGame(boatType) {
     }
 
     chunkManager.update(delta);
+    if (routeBoats) routeBoats.update(delta);
 
     renderer.render();
     requestAnimationFrame(loop);
