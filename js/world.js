@@ -15,7 +15,8 @@ const DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 // ── World ─────────────────────────────────────────────────────────────────────
 
 export class World {
-  constructor() {
+  constructor(gameMode = 'mission') {
+    this.gameMode = gameMode;
     /** @type {Uint8Array}  flat row-major grid: index = gz * GRID_SIZE + gx */
     this.grid = new Uint8Array(GRID_SIZE * GRID_SIZE); // default 0 = ICE
 
@@ -129,9 +130,8 @@ export class World {
       const cells = components[i];
       // Only detach small enough regions; leave large ones as ICE so they
       // can be split further by future boat moves.
-      //this is no longer needed for performance, only now as a gameplay
-      //element. consider removinf it if the gamemode is freeplay.
-      if (cells.length >= 2000) continue;
+      // In freeplay mode this limit is disabled so all enclosed regions detach.
+      if (this.gameMode !== 'freeplay' && cells.length >= 2000) continue;
       // Mark cells as CHUNK so they are excluded from future analysis
       for (const { gx, gz } of cells) {
         this.grid[gz * GRID_SIZE + gx] = CHUNK;
