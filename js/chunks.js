@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GRID_SIZE, TILE_SIZE } from './world.js';
 
 // ── Tuning ────────────────────────────────────────────────────────────────────
@@ -10,13 +9,27 @@ const FADE_DURATION  = 1.0; // seconds for a melted tile to fade to transparent
 const HALF       = GRID_SIZE / 2;        // grid half = 80
 const WORLD_HALF = HALF * TILE_SIZE;     // world half = 40 wu
 
+// ── Shared module-level resources ─────────────────────────────────────────────
+
+// Single geometry instance shared by all FadingTile meshes — never disposed.
+const _FADING_GEO = new THREE.BoxGeometry(TILE_SIZE, TILE_SIZE * 0.2, TILE_SIZE);
+
+// Scratch Object3D for building instance matrices without per-frame allocation.
+const _DUMMY = new THREE.Object3D();
+
+// Zero-scale matrix used to hide individual InstancedMesh instances.
+const _ZERO_MAT4 = new THREE.Matrix4().makeScale(0, 0, 0);
+
+// 4-connected neighbour offsets.
+const _NEIGHBOURS = [[1,0],[-1,0],[0,1],[0,-1]];
+
 // ── FadingTile ────────────────────────────────────────────────────────────────
 
 class FadingTile {
   constructor(scene, gx, gz) {
-    const geo = new THREE.BoxGeometry(TILE_SIZE, TILE_SIZE * 0.2, TILE_SIZE);
+    // Each tile gets its own material (opacity varies) but shares the geometry.
     const mat = new THREE.MeshBasicMaterial({ color: 0xA8D8EA, transparent: true, opacity: 1.0 });
-    this.mesh     = new THREE.Mesh(geo, mat);
+    this.mesh = new THREE.Mesh(_FADING_GEO, mat);
     this.mesh.position.set(
       (gx + 0.5) * TILE_SIZE - WORLD_HALF,
       TILE_SIZE * 0.1,
@@ -36,8 +49,7 @@ class FadingTile {
   }
 
   _dispose() {
-    this.mesh.geometry.dispose();
-    this.mesh.material.dispose();
+    this.mesh.material.dispose(); // geometry is shared — never dispose it here
     this._scene.remove(this.mesh);
     this.dead = true;
   }
@@ -52,38 +64,46 @@ class Chunk {
    */
   constructor(scene, tiles) {
     this._scene = scene;
-    this.tiles  = [...tiles]; // own copy so caller can discard the original array
 
-    // Fast O(1) membership test
-    this._tileSet = new Set(this.tiles.map(t => `${t.gx},${t.gz}`));
+    // Map from "gx,gz" key → {gx, gz} — single source of truth for membership.
+    this._tiles = new Map(tiles.map(t => [`${t.gx},${t.gz}`, t]));
+    // Map from tile key → InstancedMesh instance index (index never changes).
+    this._instanceIndex = new Map();
+    // Set of border tile keys, maintained incrementally to avoid O(N) scans.
+    this._border = new Set();
 
-    this._meltTimer  = 0;
+    this._meltTimer   = 0;
     this._fadingTiles = [];
     this.dead         = false;
 
-    this.mesh = new THREE.Mesh(
-      this._buildGeometry(),
-      new THREE.MeshBasicMaterial({ color: 0xA8D8EA })
-    );
-    scene.add(this.mesh);
-  }
+    // ── InstancedMesh — one instance per tile ─────────────────────────────────
+    // Removed tiles are hidden by zeroing their matrix; no geometry rebuild needed.
+    const geo = new THREE.BoxGeometry(TILE_SIZE, TILE_SIZE * 0.2, TILE_SIZE);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xA8D8EA });
+    this.mesh = new THREE.InstancedMesh(geo, mat, tiles.length);
 
-  // ── Geometry ─────────────────────────────────────────────────────────────────
-
-  /**
-   * Merge individual tile boxes into one BufferGeometry.
-   * Each tile is placed at the same world position the original ice tile occupied,
-   * so the chunk appears exactly where the ice was when it detached.
-   */
-  _buildGeometry() {
-    const geos = this.tiles.map(({ gx, gz }) => {
-      const g = new THREE.BoxGeometry(TILE_SIZE, TILE_SIZE * 0.2, TILE_SIZE);
-      g.translate((gx + 0.5) * TILE_SIZE - WORLD_HALF, TILE_SIZE * 0.1, (gz + 0.5) * TILE_SIZE - WORLD_HALF);
-      return g;
+    tiles.forEach((t, i) => {
+      const key = `${t.gx},${t.gz}`;
+      _DUMMY.position.set(
+        (t.gx + 0.5) * TILE_SIZE - WORLD_HALF,
+        TILE_SIZE * 0.1,
+        (t.gz + 0.5) * TILE_SIZE - WORLD_HALF
+      );
+      _DUMMY.scale.setScalar(1);
+      _DUMMY.updateMatrix();
+      this.mesh.setMatrixAt(i, _DUMMY.matrix);
+      this._instanceIndex.set(key, i);
     });
-    const merged = mergeGeometries(geos);
-    geos.forEach(g => g.dispose()); // release individual geometries immediately
-    return merged;
+    this.mesh.instanceMatrix.needsUpdate = true;
+
+    scene.add(this.mesh);
+
+    // ── Initialise border set (O(N) once at construction) ─────────────────────
+    for (const [key, { gx, gz }] of this._tiles) {
+      if (_NEIGHBOURS.some(([dx, dz]) => !this._tiles.has(`${gx + dx},${gz + dz}`))) {
+        this._border.add(key);
+      }
+    }
   }
 
   // ── Per-frame update ──────────────────────────────────────────────────────────
@@ -96,7 +116,7 @@ class Chunk {
     for (const ft of this._fadingTiles) ft.update(delta);
     this._fadingTiles = this._fadingTiles.filter(ft => !ft.dead);
 
-    // Once the merged mesh is gone (all tiles melted), wait for fades to finish
+    // Once the mesh is gone (all tiles removed), wait for fades to finish
     if (!this.mesh) {
       if (this._fadingTiles.length === 0) this.dead = true;
       return;
@@ -110,85 +130,79 @@ class Chunk {
     }
   }
 
+  // ── Internal tile removal ─────────────────────────────────────────────────────
+
+  /**
+   * Remove one tile: update data structures, zero its instance matrix,
+   * spawn a fading ghost, and refresh the incremental border set.
+   * Caller is responsible for disposing the mesh when _tiles becomes empty.
+   * @param {string} key  "gx,gz"
+   */
+  _removeTile(key) {
+    const { gx, gz } = this._tiles.get(key);
+    this._tiles.delete(key);
+    this._border.delete(key);
+
+    // Hide the instance — O(1), no geometry rebuild.
+    this.mesh.setMatrixAt(this._instanceIndex.get(key), _ZERO_MAT4);
+    this.mesh.instanceMatrix.needsUpdate = true;
+
+    // Ghost tile fades out at the removed position.
+    this._fadingTiles.push(new FadingTile(this._scene, gx, gz));
+
+    // Neighbours still in the chunk gain an exposed face → they are now border.
+    for (const [dx, dz] of _NEIGHBOURS) {
+      const nKey = `${gx + dx},${gz + dz}`;
+      if (this._tiles.has(nKey)) this._border.add(nKey);
+    }
+  }
+
+  _disposeMesh() {
+    this.mesh.geometry.dispose();
+    this.mesh.material.dispose();
+    this._scene.remove(this.mesh);
+    this.mesh = null;
+  }
+
   // ── Melt ──────────────────────────────────────────────────────────────────────
 
   _meltOneTile() {
-    // Border = tiles that have at least one 4-connected neighbour outside the chunk
-    const border = this.tiles.filter(({ gx, gz }) =>
-      [[1,0],[-1,0],[0,1],[0,-1]].some(
-        ([dx, dz]) => !this._tileSet.has(`${gx + dx},${gz + dz}`)
-      )
-    );
+    // Pick from the border set (O(√N) for compact shapes); fall back to all tiles.
+    const pool = this._border.size > 0 ? this._border : this._tiles;
+    const keys = [...pool];
+    const key  = keys[Math.floor(Math.random() * keys.length)];
 
-    // Fall back to the whole tile list if somehow all neighbours are inside
-    // (only possible for a single isolated tile, which has no neighbours at all)
-    const pool   = border.length > 0 ? border : this.tiles;
-    const victim = pool[Math.floor(Math.random() * pool.length)];
-
-    this._tileSet.delete(`${victim.gx},${victim.gz}`);
-    this.tiles = this.tiles.filter(t => t !== victim);
-
-    // Spawn a fade-out ghost at the removed tile's position
-    this._fadingTiles.push(new FadingTile(this._scene, victim.gx, victim.gz));
-
-    if (this.tiles.length === 0) {
-      // No tiles left — remove the merged mesh now; update() waits for fades then dies
-      this.mesh.geometry.dispose();
-      this.mesh.material.dispose();
-      this._scene.remove(this.mesh);
-      this.mesh = null;
-      return;
-    }
-
-    // Rebuild the merged geometry without the removed tile
-    this.mesh.geometry.dispose();
-    this.mesh.geometry = this._buildGeometry();
+    this._removeTile(key);
+    if (this._tiles.size === 0) this._disposeMesh();
   }
 
   // ── Boat carving ──────────────────────────────────────────────────────────────
 
   /**
    * Remove all tiles whose grid coords appear in cellSet (boat footprint).
-   * Rebuilds geometry once per call (not per tile) for efficiency.
    * @param {Set<string>} cellSet  keys of the form "gx,gz"
    */
   carve(cellSet) {
     if (this.dead || !this.mesh) return;
 
-    const victims = this.tiles.filter(t => cellSet.has(`${t.gx},${t.gz}`));
-    if (victims.length === 0) return;
-
-    for (const v of victims) {
-      this._tileSet.delete(`${v.gx},${v.gz}`);
-      this._fadingTiles.push(new FadingTile(this._scene, v.gx, v.gz));
-    }
-    this.tiles = this.tiles.filter(t => !cellSet.has(`${t.gx},${t.gz}`));
-
-    if (this.tiles.length === 0) {
-      this.mesh.geometry.dispose();
-      this.mesh.material.dispose();
-      this._scene.remove(this.mesh);
-      this.mesh = null;
-      return;
+    let anyRemoved = false;
+    for (const key of cellSet) {
+      if (!this._tiles.has(key)) continue;
+      this._removeTile(key);
+      anyRemoved = true;
     }
 
-    this.mesh.geometry.dispose();
-    this.mesh.geometry = this._buildGeometry();
+    if (anyRemoved && this._tiles.size === 0) this._disposeMesh();
   }
 
   hasTile(gx, gz) {
-    return this._tileSet.has(`${gx},${gz}`);
+    return this._tiles.has(`${gx},${gz}`);
   }
 
   // ── Cleanup ───────────────────────────────────────────────────────────────────
 
   _destroy() {
-    if (this.mesh) {
-      this.mesh.geometry.dispose();
-      this.mesh.material.dispose();
-      this._scene.remove(this.mesh);
-      this.mesh = null;
-    }
+    if (this.mesh) this._disposeMesh();
     for (const ft of this._fadingTiles) ft._dispose();
     this._fadingTiles = [];
     this.dead = true;

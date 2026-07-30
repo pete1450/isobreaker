@@ -127,6 +127,11 @@ export class World {
     for (let i = 0; i < components.length; i++) {
       if (i === mainIdx) continue;
       const cells = components[i];
+      // Only detach small enough regions; leave large ones as ICE so they
+      // can be split further by future boat moves.
+      //this is no longer needed for performance, only now as a gameplay
+      //element. consider removinf it if the gamemode is freeplay.
+      if (cells.length >= 2000) continue;
       // Mark cells as CHUNK so they are excluded from future analysis
       for (const { gx, gz } of cells) {
         this.grid[gz * GRID_SIZE + gx] = CHUNK;
