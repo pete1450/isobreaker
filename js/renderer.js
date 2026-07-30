@@ -124,6 +124,19 @@ export class Renderer {
     this.camera.lookAt(x, 0, z);
   }
 
+  /**
+   * Adjust the orthographic camera zoom level.
+   * @param {number} fH  frustum half-height in world units (smaller = more zoomed in)
+   */
+  setZoom(fH) {
+    const aspect = PIXEL_W / PIXEL_H;
+    this.camera.left   = -fH * aspect;
+    this.camera.right  =  fH * aspect;
+    this.camera.top    =  fH;
+    this.camera.bottom = -fH;
+    this.camera.updateProjectionMatrix();
+  }
+
   // ── Phase 2: Ice InstancedMesh ─────────────────────────────────────────────
 
   /**
