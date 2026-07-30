@@ -176,6 +176,10 @@ class Chunk {
     this.mesh.geometry = this._buildGeometry();
   }
 
+  hasTile(gx, gz) {
+    return this._tileSet.has(`${gx},${gz}`);
+  }
+
   // ── Cleanup ───────────────────────────────────────────────────────────────────
 
   _destroy() {
@@ -227,5 +231,9 @@ export class ChunkManager {
   carveTiles(footprint) {
     const cellSet = new Set(footprint.map(c => `${c.gx},${c.gz}`));
     for (const chunk of this._chunks) chunk.carve(cellSet);
+  }
+
+  hasTile(gx, gz) {
+    return this._chunks.some(chunk => chunk.hasTile(gx, gz));
   }
 }

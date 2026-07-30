@@ -3,7 +3,7 @@
 export const GRID_SIZE = 160;
 export const TILE_SIZE = 0.5; // world units per grid cell (board stays 80×80)
 
-const BORDER = 4;   // width of the pre-filled water border (ocean edge)
+export const BORDER = 4;   // width of the pre-filled water border (ocean edge)
 
 export const ICE   = 0;
 export const WATER = 1;
