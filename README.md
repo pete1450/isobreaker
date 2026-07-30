@@ -24,6 +24,7 @@ Touch controls also work choose a destination for the boat.
 2. Choose your boat type on the start screen.
 3. Steer the boat to carve a water path through the ice.
 4. Completely encircle a region of ice — it detaches and begins melting.
+5. Watch for escort boats at the edge of the board and clear a wide enough path along their dotted route so they can cross.
 
 ## Project Structure
 
@@ -31,6 +32,7 @@ Touch controls also work choose a destination for the boat.
 index.html          - Game page, Three.js CDN import map, start screen UI
 js/
   main.js           - Game loop, orchestration, keyboard input
+  routes.js         - Escort boat routes, dotted path markers, and crossing logic
   world.js          - 80×80 grid state, breakIce(), floodFill(), getNewChunks()
   renderer.js       - Three.js scene, pixel render target, InstancedMesh, syncIceMesh()
   boat.js           - Boat controls, movement, and mesh

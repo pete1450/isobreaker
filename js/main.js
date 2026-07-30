@@ -3,6 +3,7 @@ import { Renderer }      from './renderer.js';
 import { World }         from './world.js';
 import { Boat }          from './boat.js';
 import { ChunkManager }  from './chunks.js';
+import { RouteBoatManager } from './routes.js';
 
 const canvas = document.getElementById('c');
 
@@ -28,6 +29,7 @@ function startGame(boatType) {
   const world        = new World();
   const boat         = new Boat(renderer.scene, boatType);
   const chunkManager = new ChunkManager(renderer.scene);
+  const routeBoats   = new RouteBoatManager(renderer.scene, world, chunkManager);
 
   renderer.initIceMesh(world);
 
@@ -173,6 +175,7 @@ function startGame(boatType) {
     }
 
     chunkManager.update(delta);
+    routeBoats.update(delta);
 
     renderer.render();
     requestAnimationFrame(loop);
