@@ -89,12 +89,50 @@ function buildTravelCells(pathCells, horizontal, reverse = false) {
   return travel;
 }
 
+function buildClearanceCells(pathCells, world) {
+  const clearance = [];
+  const seen = new Set();
+
+  function add(gx, gz) {
+    if (!world.inBounds(gx, gz)) return;
+    const key = `${gx},${gz}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    clearance.push({ gx, gz });
+  }
+
+  for (let i = 0; i < pathCells.length; i++) {
+    const cell = pathCells[i];
+    const prev = pathCells[i - 1] ?? cell;
+    const next = pathCells[i + 1] ?? cell;
+    const dirs = [
+      [cell.gx - prev.gx, cell.gz - prev.gz],
+      [next.gx - cell.gx, next.gz - cell.gz],
+    ];
+
+    for (const [dx, dz] of dirs) {
+      if (dx !== 0) {
+        add(cell.gx, cell.gz - 1);
+        add(cell.gx, cell.gz);
+        add(cell.gx, cell.gz + 1);
+      } else if (dz !== 0) {
+        add(cell.gx - 1, cell.gz);
+        add(cell.gx, cell.gz);
+        add(cell.gx + 1, cell.gz);
+      }
+    }
+  }
+
+  return clearance;
+}
+
 export class RouteBoatManager {
   constructor(scene, world, chunkManager) {
     this._scene = scene;
     this._world = world;
     this._chunkManager = chunkManager;
     this._routeCells = [];
+    this._clearanceCells = [];
     this._travelPoints = [];
     this._state = 'cooldown';
     this._respawnTimer = 0;
@@ -137,6 +175,7 @@ export class RouteBoatManager {
     const horizontal = Math.random() < 0.5;
     const reverse = Math.random() < 0.5;
     this._routeCells = buildCrossingPath(horizontal);
+    this._clearanceCells = buildClearanceCells(this._routeCells, this._world);
     this._travelPoints = buildTravelCells(this._routeCells, horizontal, reverse).map(({ gx, gz }) => gridToWorld(gx, gz));
     this._segmentIndex = 0;
     this._segmentDistance = 0;
@@ -196,7 +235,7 @@ export class RouteBoatManager {
   }
 
   _isRouteClear() {
-    return this._routeCells.every(({ gx, gz }) =>
+    return this._clearanceCells.every(({ gx, gz }) =>
       !this._world.isIce(gx, gz) && !this._chunkManager.hasTile(gx, gz)
     );
   }

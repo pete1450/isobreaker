@@ -24,7 +24,7 @@ Touch controls also work choose a destination for the boat.
 2. Choose your boat type on the start screen.
 3. Steer the boat to carve a water path through the ice.
 4. Completely encircle a region of ice — it detaches and begins melting.
-5. Watch for escort boats at the edge of the board and clear their dotted route so they can cross.
+5. Watch for escort boats at the edge of the board and clear a wide enough path along their dotted route so they can cross.
 
 ## Project Structure
 
