@@ -127,10 +127,16 @@ function buildClearanceCells(pathCells, world) {
 }
 
 export class RouteBoatManager {
-  constructor(scene, world, chunkManager) {
+  constructor(scene, world, chunkManager, callbacks = {}) {
     this._scene = scene;
     this._world = world;
     this._chunkManager = chunkManager;
+    this._onTick = callbacks.onTick ?? null;
+    this._onGameOver = callbacks.onGameOver ?? null;
+    this._timer = 60;
+    this._totalScore = 0;
+    this._boatsCrossed = 0;
+    this._done = false;
     this._routeCells = [];
     this._clearanceCells = [];
     this._travelPoints = [];
@@ -150,11 +156,18 @@ export class RouteBoatManager {
   }
 
   update(delta) {
+    if (this._done) return;
+
     if (this._state === 'waiting') {
       this._boat.position.y = BOAT_Y + Math.sin(performance.now() * 0.004) * 0.03;
+      this._timer = Math.max(0, this._timer - delta);
+      if (this._onTick) this._onTick(this._timer, this._totalScore, this._boatsCrossed);
       if (this._isRouteClear()) {
+        const pts = Math.floor(this._timer);
+        this._totalScore += pts;
         this._state = 'traveling';
         this._dotMaterial.color.setHex(0x7FE7CC);
+        if (this._onTick) this._onTick(this._timer, this._totalScore, this._boatsCrossed);
       }
       return;
     }
@@ -169,6 +182,7 @@ export class RouteBoatManager {
   }
 
   _spawnRoute() {
+    this._timer = 60;
     this._clearRouteDots();
     this._dotMaterial.color.setHex(0xF2C14E);
 
@@ -229,8 +243,14 @@ export class RouteBoatManager {
 
     if (this._segmentIndex >= this._travelPoints.length - 1) {
       this._boat.visible = false;
-      this._state = 'cooldown';
-      this._respawnTimer = RESPAWN_DELAY;
+      this._boatsCrossed += 1;
+      if (this._boatsCrossed >= 5) {
+        this._done = true;
+        if (this._onGameOver) this._onGameOver(this._totalScore);
+      } else {
+        this._state = 'cooldown';
+        this._respawnTimer = RESPAWN_DELAY;
+      }
     }
   }
 
